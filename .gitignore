@@ -1,0 +1,16 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# .NET / MAUI
+**/bin/
+**/obj/
+.vs/
+*.user
+*.suo
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/

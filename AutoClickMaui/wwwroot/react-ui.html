@@ -1,0 +1,739 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AutoClick MAUI</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Segoe UI, Inter, Arial, sans-serif;
+      color: #142033;
+      background:
+        radial-gradient(1200px 500px at 10% -10%, rgba(66, 153, 225, .25), transparent 60%),
+        radial-gradient(900px 500px at 100% 0%, rgba(126, 87, 194, .2), transparent 55%),
+        linear-gradient(180deg, #f2f7ff, #edf3fb);
+      min-height: 100vh;
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 16px; }
+    .card {
+      background: rgba(255, 255, 255, .62);
+      border: 1px solid rgba(255, 255, 255, .7);
+      border-radius: 14px;
+      box-shadow: 0 10px 25px rgba(32, 52, 84, .08);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .grow { flex: 1 1 240px; }
+    label { font-size: 12px; color: #456; }
+    input, select, button {
+      border: 1px solid #c7d4e5;
+      border-radius: 10px;
+      background: rgba(255,255,255,.85);
+      color: #10243b;
+      padding: 8px 10px;
+      font-size: 13px;
+    }
+    button { cursor: pointer; font-weight: 600; }
+    button.primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+    button.danger { background: #ef4444; color: #fff; border-color: #ef4444; }
+    .status { font-size: 12px; color: #356; }
+    .pill {
+      display:inline-block;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 11px;
+      background: rgba(37,99,235,.12);
+      color: #1e40af;
+      font-weight: 700;
+    }
+    .actions { display: grid; gap: 8px; margin-top: 8px; }
+    .action {
+      background: rgba(255,255,255,.5);
+      border: 1px dashed #bfd0e5;
+      border-radius: 10px;
+      padding: 8px;
+    }
+    .small { font-size: 12px; color: #587; }
+    .diag-ok { color: #166534; }
+    .diag-fail { color: #991b1b; }
+    .diag-list { margin: 8px 0 0; padding-left: 18px; }
+    .diag-list li { margin-bottom: 4px; }
+    .overlay {
+      position: fixed; inset: 0;
+      background: rgba(8, 16, 30, .45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .overlay.show { display: flex; }
+    .overlay-inner {
+      background: rgba(255,255,255,.95);
+      border: 1px solid #d3deec;
+      border-radius: 12px;
+      padding: 10px;
+      max-width: 95vw;
+      max-height: 90vh;
+      overflow: auto;
+    }
+    .img-wrap { position: relative; display: inline-block; }
+    #captureImage { display: block; max-width: 88vw; max-height: 68vh; user-select: none; }
+    #captureRect { position: absolute; border: 2px solid #ef4444; pointer-events: none; display: none; }
+    #capturePoint { position: absolute; width: 12px; height: 12px; border: 2px solid #10b981; border-radius: 50%; transform: translate(-6px,-6px); pointer-events: none; display: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="row" style="justify-content:space-between;">
+        <div>
+          <strong>AutoClick MAUI</strong>
+          <div class="small">Proyecto de Alberto Gonzalez · albertogonzalez1.5.20002gmail.com</div>
+        </div>
+        <div class="row">
+          <span id="runPill" class="pill">Detenido</span>
+          <span id="statusText" class="status">Listo</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div class="grow">
+          <label>Pantalla</label><br/>
+          <select id="monitorSelect" style="width:100%;"></select>
+          <div id="monitorNameText" class="small" style="margin-top:6px;">Sin monitor detectado</div>
+        </div>
+        <div>
+          <label>Modo</label><br/>
+          <select id="modeSelect">
+            <option value="ordered">Ruta ordenada</option>
+            <option value="any">Sin orden</option>
+          </select>
+        </div>
+        <div>
+          <label>Intervalo (ms)</label><br/>
+          <input id="intervalInput" type="number" value="250" min="30" />
+        </div>
+        <div>
+          <label>Cooldown (ms)</label><br/>
+          <input id="cooldownInput" type="number" value="800" min="0" />
+        </div>
+        <div>
+          <label style="display:flex;align-items:center;gap:6px;margin-top:20px;">
+            <input id="requireChangeCheckbox" type="checkbox" />
+            Esperar cambio de pantalla tras clic
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between;">
+        <strong>Acciones</strong>
+        <button id="addActionBtn">+ Añadir acción</button>
+      </div>
+      <div class="small">En ruta ordenada se ejecutan por orden. En sin orden se ejecuta la que aparezca.</div>
+      <div id="actionsContainer" class="actions"></div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <button id="startBtn" class="primary">Iniciar</button>
+        <button id="stopBtn" class="danger">Detener</button>
+        <button id="selfTestBtn">Test del sistema</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between;">
+        <strong>Diagnóstico de inicio</strong>
+        <span id="diagBadge" class="pill">Pendiente</span>
+      </div>
+      <div id="diagSummary" class="small" style="margin-top:8px;">Ejecutando comprobaciones...</div>
+      <ul id="diagList" class="diag-list small"></ul>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <strong>Perfiles</strong>
+        <input id="profileNameInput" placeholder="Nombre de perfil" />
+        <button id="saveProfileBtn">Guardar</button>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <select id="profilesSelect" class="grow"><option value="">Selecciona perfil</option></select>
+        <button id="loadProfileBtn">Cargar</button>
+        <button id="refreshProfilesBtn">Actualizar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="captureOverlay" class="overlay">
+    <div class="overlay-inner">
+      <div class="row" style="justify-content:space-between; margin-bottom:8px;">
+        <strong id="captureTitle">Captura</strong>
+        <div class="row">
+          <button id="captureConfirmBtn" class="primary">Confirmar</button>
+          <button id="captureCancelBtn">Cancelar</button>
+        </div>
+      </div>
+      <div class="img-wrap">
+        <img id="captureImage" draggable="false" />
+        <div id="captureRect"></div>
+        <div id="capturePoint"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      running: false,
+      status: "Listo",
+      monitorId: "",
+      monitorName: "Sin monitor detectado",
+      executionMode: "any",
+      intervalMs: 250,
+      cooldownMs: 800,
+      requireScreenChangeAfterClick: false,
+      actions: [],
+      profiles: [],
+      capture: {
+        open: false,
+        actionId: "",
+        mode: "template",
+        image: "",
+        dragStart: null,
+        rect: null,
+        point: null
+      }
+    };
+
+    const pendingRequests = new Map();
+    const makeId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    window.onNativeMessage = (message) => {
+      if (message.kind === "response") {
+        const p = pendingRequests.get(message.requestId);
+        if (p) {
+          pendingRequests.delete(message.requestId);
+          if (message.success === false) {
+            p.reject(new Error(message.error || "Error nativo"));
+          } else {
+            p.resolve(message.data);
+          }
+        }
+      }
+    };
+
+    const invokeNative = (type, payload = {}, timeoutMs = 20000) => {
+      const requestId = makeId();
+      const request = { requestId, type, ...payload };
+      const url = `app://invoke?payload=${encodeURIComponent(JSON.stringify(request))}`;
+
+      return new Promise((resolve, reject) => {
+        pendingRequests.set(requestId, { resolve, reject });
+        window.location.href = url;
+        setTimeout(() => {
+          if (pendingRequests.has(requestId)) {
+            pendingRequests.delete(requestId);
+            reject(new Error("Timeout del bridge nativo"));
+          }
+        }, timeoutMs);
+      });
+    };
+
+    const els = {
+      runPill: document.getElementById("runPill"),
+      statusText: document.getElementById("statusText"),
+      monitorSelect: document.getElementById("monitorSelect"),
+      monitorNameText: document.getElementById("monitorNameText"),
+      modeSelect: document.getElementById("modeSelect"),
+      intervalInput: document.getElementById("intervalInput"),
+      cooldownInput: document.getElementById("cooldownInput"),
+      requireChangeCheckbox: document.getElementById("requireChangeCheckbox"),
+      actionsContainer: document.getElementById("actionsContainer"),
+      profileNameInput: document.getElementById("profileNameInput"),
+      profilesSelect: document.getElementById("profilesSelect"),
+      overlay: document.getElementById("captureOverlay"),
+      captureImage: document.getElementById("captureImage"),
+      captureRect: document.getElementById("captureRect"),
+      capturePoint: document.getElementById("capturePoint"),
+      captureTitle: document.getElementById("captureTitle")
+      ,diagBadge: document.getElementById("diagBadge")
+      ,diagSummary: document.getElementById("diagSummary")
+      ,diagList: document.getElementById("diagList")
+    };
+
+    function newAction() {
+      return {
+        id: makeId(),
+        name: "Acción",
+        threshold: 0.88,
+        templateBase64: "",
+        clickPoint: { x: 0, y: 0 }
+      };
+    }
+
+    function getAction(id) {
+      return state.actions.find(a => a.id === id);
+    }
+
+    function renderProfiles() {
+      const current = els.profilesSelect.value;
+      els.profilesSelect.innerHTML = '<option value="">Selecciona perfil</option>';
+      state.profiles.forEach(p => {
+        const op = document.createElement("option");
+        op.value = p.name;
+        op.textContent = p.name;
+        els.profilesSelect.appendChild(op);
+      });
+      els.profilesSelect.value = current;
+    }
+
+    function monitorIdOf(m) {
+      return (m && (m.id ?? m.Id)) ? String(m.id ?? m.Id) : "";
+    }
+
+    function monitorNameOf(m) {
+      return (m && (m.name ?? m.Name)) ? String(m.name ?? m.Name) : "Pantalla";
+    }
+
+    function renderMonitors(monitors) {
+      const current = state.monitorId;
+      els.monitorSelect.innerHTML = "";
+
+      if (!monitors.length) {
+        const op = document.createElement("option");
+        op.value = "";
+        op.textContent = "Sin pantallas detectadas";
+        els.monitorSelect.appendChild(op);
+        state.monitorId = "";
+        state.monitorName = "Sin monitor detectado";
+        return;
+      }
+
+      monitors.forEach(m => {
+        const op = document.createElement("option");
+        op.value = monitorIdOf(m);
+        op.textContent = monitorNameOf(m);
+        els.monitorSelect.appendChild(op);
+      });
+
+      const exists = monitors.some(m => monitorIdOf(m) === current);
+      state.monitorId = exists ? current : monitorIdOf(monitors[0]);
+      els.monitorSelect.value = state.monitorId;
+      const selected = monitors.find(m => monitorIdOf(m) === state.monitorId);
+      state.monitorName = selected ? monitorNameOf(selected) : monitorNameOf(monitors[0]);
+    }
+
+    function renderActions() {
+      els.actionsContainer.innerHTML = "";
+      state.actions.forEach((a, index) => {
+        const row = document.createElement("div");
+        row.className = "action";
+        row.innerHTML = `
+          <div class="row">
+            <span class="pill">Paso ${index + 1}</span>
+            <input data-id="${a.id}" data-field="name" value="${(a.name || "").replace(/"/g, '&quot;')}" placeholder="Nombre" />
+            <label>Umbral</label>
+            <input data-id="${a.id}" data-field="threshold" type="number" step="0.01" min="0" max="1" value="${a.threshold}" />
+            <button data-action="template" data-id="${a.id}">Capturar plantilla</button>
+            <button data-action="point" data-id="${a.id}">Elegir punto</button>
+            <button data-action="delete" data-id="${a.id}">Eliminar</button>
+          </div>
+          <div class="small">Plantilla: ${a.templateBase64 ? "OK" : "Sin plantilla"} · Punto: (${a.clickPoint.x}, ${a.clickPoint.y})</div>
+        `;
+        els.actionsContainer.appendChild(row);
+      });
+    }
+
+    function updateHeader() {
+      els.runPill.textContent = state.running ? "Activo" : "Detenido";
+      els.statusText.textContent = state.status;
+      if (els.monitorNameText) {
+        els.monitorNameText.textContent = state.monitorName || "Sin monitor detectado";
+      }
+      els.modeSelect.value = state.executionMode;
+      els.intervalInput.value = state.intervalMs;
+      els.cooldownInput.value = state.cooldownMs;
+      els.requireChangeCheckbox.checked = !!state.requireScreenChangeAfterClick;
+    }
+
+    async function refreshMonitors() {
+      try {
+        const data = await invokeNative("GetMonitors");
+        const monitors = data.monitors || [];
+        renderMonitors(monitors);
+        if (!monitors.length) {
+          state.status = "No se detectaron pantallas";
+        } else {
+          state.status = `Pantallas detectadas: ${monitors.length}`;
+        }
+        updateHeader();
+      } catch (err) {
+        state.status = "Error al leer pantallas";
+        updateHeader();
+        alert("Error obteniendo pantallas: " + String(err));
+      }
+    }
+
+    async function refreshProfiles() {
+      const data = await invokeNative("ListProfiles");
+      state.profiles = data.profiles || [];
+      renderProfiles();
+    }
+
+    function openCapture(actionId, mode, imageSource) {
+      state.capture.open = true;
+      state.capture.actionId = actionId;
+      state.capture.mode = mode;
+      state.capture.image = imageSource;
+      state.capture.dragStart = null;
+      state.capture.rect = null;
+      state.capture.point = null;
+
+      els.captureTitle.textContent = mode === "template" ? "Recorta la plantilla" : "Elige punto de clic";
+      els.captureImage.src = state.capture.image;
+      els.captureRect.style.display = "none";
+      els.capturePoint.style.display = "none";
+      els.overlay.classList.add("show");
+    }
+
+    async function startPointCapture(actionId) {
+      const action = getAction(actionId);
+      if (!action || !action.templateBase64) {
+        alert("Primero captura la plantilla de esta acción.");
+        return;
+      }
+
+      state.status = "Selecciona punto dentro de la plantilla";
+      updateHeader();
+      openCapture(actionId, "point", action.templateBase64);
+    }
+
+    function closeCapture() {
+      state.capture.open = false;
+      els.overlay.classList.remove("show");
+    }
+
+    function setRect(rect) {
+      state.capture.rect = rect;
+      els.captureRect.style.display = "block";
+      els.captureRect.style.left = rect.x + "px";
+      els.captureRect.style.top = rect.y + "px";
+      els.captureRect.style.width = rect.width + "px";
+      els.captureRect.style.height = rect.height + "px";
+    }
+
+    function setPoint(point) {
+      state.capture.point = point;
+      els.capturePoint.style.display = "block";
+      els.capturePoint.style.left = point.x + "px";
+      els.capturePoint.style.top = point.y + "px";
+    }
+
+    async function startCapture(actionId, mode) {
+      try {
+        if (!state.monitorId) {
+          await refreshMonitors();
+        }
+
+        state.status = "Preparando recorte...";
+        updateHeader();
+        const data = await invokeNative("CaptureMonitor", { monitorId: state.monitorId }, 60000);
+        if (!data || !data.screenshotBase64) {
+          throw new Error("La captura llegó vacía.");
+        }
+        openCapture(actionId, mode, `data:image/jpeg;base64,${data.screenshotBase64}`);
+
+        state.status = mode === "template" ? "Recorta la plantilla" : "Selecciona el punto";
+        updateHeader();
+      } catch (err) {
+        state.status = "Error al abrir recorte";
+        updateHeader();
+        alert("No se pudo abrir el recorte de pantalla: " + String(err));
+      }
+    }
+
+    function confirmCapture() {
+      const action = getAction(state.capture.actionId);
+      if (!action) return;
+
+      const img = els.captureImage;
+      const sx = img.naturalWidth / img.clientWidth;
+      const sy = img.naturalHeight / img.clientHeight;
+
+      if (state.capture.mode === "template") {
+        const r = state.capture.rect;
+        if (!r || r.width < 5 || r.height < 5) {
+          alert("Selecciona un área válida");
+          return;
+        }
+        const cropX = Math.floor(r.x * sx);
+        const cropY = Math.floor(r.y * sy);
+        const cropW = Math.floor(r.width * sx);
+        const cropH = Math.floor(r.height * sy);
+
+        const canvas = document.createElement("canvas");
+        canvas.width = cropW;
+        canvas.height = cropH;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+        action.templateBase64 = canvas.toDataURL("image/png");
+        action.clickPoint = { x: Math.floor(cropW / 2), y: Math.floor(cropH / 2) };
+      } else {
+        const p = state.capture.point;
+        if (!p) {
+          alert("Selecciona un punto");
+          return;
+        }
+        action.clickPoint = { x: Math.floor(p.x * sx), y: Math.floor(p.y * sy) };
+      }
+
+      renderActions();
+      closeCapture();
+    }
+
+    function validateActions() {
+      if (!state.actions.length) return "Debes crear al menos una acción";
+      for (const a of state.actions) {
+        if (!a.templateBase64) return `La acción '${a.name}' no tiene plantilla`;
+      }
+      return "";
+    }
+
+    async function startDetection() {
+      const err = validateActions();
+      if (err) {
+        alert(err);
+        return;
+      }
+      try {
+        const data = await invokeNative("StartDetection", {
+          monitorId: state.monitorId,
+          executionMode: state.executionMode,
+          intervalMs: Number(state.intervalMs),
+          cooldownMs: Number(state.cooldownMs),
+          requireScreenChangeAfterClick: !!state.requireScreenChangeAfterClick,
+          actions: state.actions.map(a => ({
+            name: a.name,
+            threshold: Number(a.threshold),
+            templateBase64: a.templateBase64,
+            clickPoint: { x: Number(a.clickPoint.x), y: Number(a.clickPoint.y) }
+          }))
+        });
+        state.running = !!data.running;
+        state.status = data.status || "Iniciado";
+        updateHeader();
+      } catch (e) {
+        state.running = false;
+        state.status = `Error al iniciar: ${String(e)}`;
+        updateHeader();
+        alert(state.status);
+      }
+    }
+
+    async function stopDetection() {
+      await invokeNative("StopDetection");
+      state.running = false;
+      updateHeader();
+    }
+
+    function renderDiagnostic(result, titleOverride) {
+      const ok = !!result.ok;
+      els.diagBadge.textContent = ok ? "OK" : "Fallo";
+      els.diagBadge.className = `pill ${ok ? "diag-ok" : "diag-fail"}`;
+      els.diagSummary.textContent = titleOverride || (ok ? "Todas las comprobaciones pasaron." : "Hay comprobaciones con fallo.");
+      els.diagList.innerHTML = "";
+
+      (result.checks || []).forEach(c => {
+        const li = document.createElement("li");
+        li.className = c.ok ? "diag-ok" : "diag-fail";
+        li.textContent = `${c.ok ? "✅" : "❌"} ${c.name}: ${c.detail}`;
+        els.diagList.appendChild(li);
+      });
+    }
+
+    async function runSelfTest(showAlert = true) {
+      try {
+        const result = await invokeNative("RunSelfTest");
+        renderDiagnostic(result);
+        const lines = (result.checks || []).map(c => `${c.ok ? "✅" : "❌"} ${c.name}: ${c.detail}`);
+        const title = result.ok ? "TEST OK" : "TEST CON FALLOS";
+        if (showAlert) {
+          alert(`${title}\n\n${lines.join("\n")}`);
+        }
+        state.status = result.ok ? "Self test OK" : "Self test con fallos";
+        updateHeader();
+      } catch (err) {
+        const msg = `Error ejecutando self test: ${String(err)}`;
+        renderDiagnostic({ ok: false, checks: [{ ok: false, name: "Self test", detail: msg }] }, "No se pudo completar el diagnóstico.");
+        if (showAlert) {
+          alert(msg);
+        }
+      }
+    }
+
+    async function saveProfile() {
+      const name = els.profileNameInput.value.trim();
+      if (!name) {
+        alert("Escribe nombre de perfil");
+        return;
+      }
+      await invokeNative("SaveProfile", {
+        profile: {
+          name,
+          monitorId: state.monitorId,
+          executionMode: state.executionMode,
+          intervalMs: Number(state.intervalMs),
+          cooldownMs: Number(state.cooldownMs),
+          requireScreenChangeAfterClick: !!state.requireScreenChangeAfterClick,
+          actions: state.actions.map(a => ({
+            name: a.name,
+            threshold: Number(a.threshold),
+            templateBase64: a.templateBase64,
+            clickPoint: { x: Number(a.clickPoint.x), y: Number(a.clickPoint.y) }
+          }))
+        }
+      });
+      await refreshProfiles();
+    }
+
+    async function loadProfile() {
+      const name = els.profilesSelect.value;
+      if (!name) return;
+      const data = await invokeNative("LoadProfile", { name });
+      const p = data.profile;
+      els.profileNameInput.value = p.name || "";
+      state.monitorId = p.monitorId || "";
+      state.executionMode = p.executionMode || "any";
+      state.intervalMs = p.intervalMs || 250;
+      state.cooldownMs = p.cooldownMs || 800;
+      state.requireScreenChangeAfterClick = !!(p.requireScreenChangeAfterClick ?? p.RequireScreenChangeAfterClick);
+      state.actions = (p.actions || []).map(a => ({ ...a, id: makeId() }));
+      await refreshMonitors();
+      renderActions();
+      updateHeader();
+    }
+
+    function bindEvents() {
+      document.getElementById("refreshProfilesBtn").addEventListener("click", refreshProfiles);
+      document.getElementById("addActionBtn").addEventListener("click", () => {
+        state.actions.push(newAction());
+        renderActions();
+      });
+      document.getElementById("startBtn").addEventListener("click", startDetection);
+      document.getElementById("stopBtn").addEventListener("click", stopDetection);
+      document.getElementById("selfTestBtn").addEventListener("click", runSelfTest);
+      document.getElementById("saveProfileBtn").addEventListener("click", saveProfile);
+      document.getElementById("loadProfileBtn").addEventListener("click", loadProfile);
+      document.getElementById("captureConfirmBtn").addEventListener("click", confirmCapture);
+      document.getElementById("captureCancelBtn").addEventListener("click", closeCapture);
+      els.monitorSelect.addEventListener("change", (e) => {
+        state.monitorId = e.target.value || "";
+        const selectedName = e.target.options[e.target.selectedIndex]?.text || "Sin monitor detectado";
+        state.monitorName = selectedName;
+        updateHeader();
+      });
+
+      els.modeSelect.addEventListener("change", (e) => { state.executionMode = e.target.value; updateHeader(); });
+      els.intervalInput.addEventListener("input", (e) => state.intervalMs = Number(e.target.value || 250));
+      els.cooldownInput.addEventListener("input", (e) => state.cooldownMs = Number(e.target.value || 800));
+      els.requireChangeCheckbox.addEventListener("change", (e) => {
+        state.requireScreenChangeAfterClick = !!e.target.checked;
+        updateHeader();
+      });
+
+      els.actionsContainer.addEventListener("input", (e) => {
+        const id = e.target.getAttribute("data-id");
+        const field = e.target.getAttribute("data-field");
+        if (!id || !field) return;
+        const action = getAction(id);
+        if (!action) return;
+        action[field] = field === "threshold" ? Number(e.target.value) : e.target.value;
+        renderActions();
+      });
+
+      els.actionsContainer.addEventListener("click", async (e) => {
+        const action = e.target.getAttribute("data-action");
+        const id = e.target.getAttribute("data-id");
+        if (!action || !id) return;
+        if (action === "delete") {
+          state.actions = state.actions.filter(a => a.id !== id);
+          renderActions();
+          return;
+        }
+        if (action === "template" || action === "point") {
+          if (action === "template") {
+            await startCapture(id, action);
+          } else {
+            await startPointCapture(id);
+          }
+        }
+      });
+
+      els.captureImage.addEventListener("mousedown", (e) => {
+        if (state.capture.mode !== "template") return;
+        const r = els.captureImage.getBoundingClientRect();
+        const x = e.clientX - r.left;
+        const y = e.clientY - r.top;
+        state.capture.dragStart = { x, y };
+        setRect({ x, y, width: 0, height: 0 });
+      });
+
+      els.captureImage.addEventListener("mousemove", (e) => {
+        if (state.capture.mode !== "template" || !state.capture.dragStart) return;
+        const r = els.captureImage.getBoundingClientRect();
+        const x = e.clientX - r.left;
+        const y = e.clientY - r.top;
+        const sx = state.capture.dragStart.x;
+        const sy = state.capture.dragStart.y;
+        setRect({ x: Math.min(x, sx), y: Math.min(y, sy), width: Math.abs(x - sx), height: Math.abs(y - sy) });
+      });
+
+      window.addEventListener("mouseup", () => {
+        state.capture.dragStart = null;
+      });
+
+      els.captureImage.addEventListener("click", (e) => {
+        if (state.capture.mode !== "point") return;
+        const r = els.captureImage.getBoundingClientRect();
+        setPoint({ x: e.clientX - r.left, y: e.clientY - r.top });
+      });
+    }
+
+    async function init() {
+      try {
+        state.actions = [newAction()];
+        bindEvents();
+        renderDiagnostic({ ok: false, checks: [] }, "Ejecutando comprobaciones de arranque...");
+        await runSelfTest(false);
+        await refreshMonitors();
+        await refreshProfiles();
+        renderActions();
+        updateHeader();
+
+        setInterval(async () => {
+          try {
+            const data = await invokeNative("GetStatus");
+            state.status = data.status || "-";
+            state.running = !!data.running;
+            updateHeader();
+          } catch (_) {
+          }
+        }, 1000);
+      } catch (err) {
+        document.body.innerHTML = `<div style="padding:16px;color:#b91c1c;font-family:Segoe UI">Error de inicialización: ${String(err)}</div>`;
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
